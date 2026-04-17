@@ -8,6 +8,28 @@ import (
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "goclaw-skills-home-*")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(home)
+
+	origHome := os.Getenv("HOME")
+	if err := os.Setenv("HOME", home); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if origHome == "" {
+			_ = os.Unsetenv("HOME")
+			return
+		}
+		_ = os.Setenv("HOME", origHome)
+	}()
+
+	os.Exit(m.Run())
+}
+
 // makeSkillDir creates a skill directory with a SKILL.md file.
 func makeSkillDir(t *testing.T, parent, slug, content string) string {
 	t.Helper()
@@ -154,6 +176,43 @@ func TestLoader_ListSkills_BuiltinSkills(t *testing.T) {
 	}
 	if skills[0].Source != "builtin" {
 		t.Errorf("source: got %q, want builtin", skills[0].Source)
+	}
+}
+
+func TestLoader_ListSkills_PersonalAgentSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	makeSkillDir(t, filepath.Join(home, ".agents", "skills"), "personal-skill", "---\nname: Personal\n---\n")
+
+	l := NewLoader("", "", "")
+	skills := l.ListSkills(context.Background())
+
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 personal skill, got %d", len(skills))
+	}
+	if skills[0].Source != "agents-personal" {
+		t.Errorf("source: got %q, want agents-personal", skills[0].Source)
+	}
+}
+
+func TestLoader_ListSkills_DisablePersonalAgentSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(disablePersonalAgentSkillsEnv, "1")
+
+	makeSkillDir(t, filepath.Join(home, ".agents", "skills"), "personal-skill", "---\nname: Personal\n---\n")
+
+	l := NewLoader("", "", "")
+	skills := l.ListSkills(context.Background())
+
+	if len(skills) != 0 {
+		t.Fatalf("expected personal skills to be disabled, got %d", len(skills))
+	}
+	for _, dir := range l.Dirs() {
+		if strings.Contains(dir, filepath.Join(".agents", "skills")) {
+			t.Fatalf("personal skills dir should not be watched when disabled, got %q", dir)
+		}
 	}
 }
 
