@@ -62,6 +62,8 @@ type Loader struct {
 	version atomic.Int64
 }
 
+const disablePersonalAgentSkillsEnv = "GOCLAW_DISABLE_PERSONAL_AGENT_SKILLS"
+
 // NewLoader creates a skills loader.
 // workspace: project workspace root (skills dir is workspace/skills/)
 // globalSkills: global skills directory (e.g. ~/.goclaw/skills)
@@ -74,12 +76,7 @@ func NewLoader(workspace, globalSkills, builtinSkills string) *Loader {
 		projectAgentSkills = filepath.Join(workspace, ".agents", "skills")
 	}
 
-	// Personal agent skills: ~/.agents/skills/ (matching TS)
-	homeDir, _ := os.UserHomeDir()
-	personalAgentSkills := ""
-	if homeDir != "" {
-		personalAgentSkills = filepath.Join(homeDir, ".agents", "skills")
-	}
+	personalAgentSkills := personalAgentSkillsDir()
 
 	return &Loader{
 		workspaceSkills:     wsSkills,
@@ -88,6 +85,33 @@ func NewLoader(workspace, globalSkills, builtinSkills string) *Loader {
 		globalSkills:        globalSkills,
 		builtinSkills:       builtinSkills,
 		cache:               make(map[string]*Info),
+	}
+}
+
+func personalAgentSkillsDir() string {
+	if personalAgentSkillsDisabled() {
+		return ""
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		return ""
+	}
+
+	return filepath.Join(homeDir, ".agents", "skills")
+}
+
+func personalAgentSkillsDisabled() bool {
+	v, ok := os.LookupEnv(disablePersonalAgentSkillsEnv)
+	if !ok {
+		return false
+	}
+
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 
