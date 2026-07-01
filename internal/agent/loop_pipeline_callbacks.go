@@ -720,9 +720,6 @@ func setDefaultPromptCacheOptions(opts map[string]any, tenantID, agentID uuid.UU
 	if _, ok := opts[providers.OptPromptCacheKey]; !ok {
 		opts[providers.OptPromptCacheKey] = defaultPromptCacheKey(tenantID, agentID, providerName, sessionKey)
 	}
-	if _, ok := opts[providers.OptPromptCacheRetention]; !ok {
-		opts[providers.OptPromptCacheRetention] = "24h"
-	}
 }
 
 func defaultPromptCacheKey(tenantID, agentID uuid.UUID, providerName, sessionKey string) string {

@@ -1143,8 +1143,8 @@ func TestCodexBuildRequestBodyPromptCacheControls(t *testing.T) {
 	if got := body["prompt_cache_key"]; got != "agent/session/provider" {
 		t.Fatalf("prompt_cache_key = %v, want agent/session/provider", got)
 	}
-	if got := body["prompt_cache_retention"]; got != "24h" {
-		t.Fatalf("prompt_cache_retention = %v, want 24h", got)
+	if _, ok := body["prompt_cache_retention"]; ok {
+		t.Fatal("prompt_cache_retention should not be sent to codex")
 	}
 }
 

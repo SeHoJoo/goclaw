@@ -2,6 +2,8 @@ package slack
 
 import (
 	"testing"
+
+	"github.com/nextlevelbuilder/goclaw/internal/config"
 )
 
 func TestExtractChannelID(t *testing.T) {
@@ -117,5 +119,32 @@ func TestExtractThreadTS(t *testing.T) {
 				t.Errorf("extractThreadTS(%q) = %q, want %q", tt.localKey, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestStreamEnabledDisabledByThinkingPlaceholder(t *testing.T) {
+	enabled := true
+	disabled := false
+
+	ch := &Channel{
+		config: config.SlackConfig{
+			DMStream:    &enabled,
+			GroupStream: &enabled,
+		},
+	}
+	if !ch.StreamEnabled(false) || !ch.StreamEnabled(true) {
+		t.Fatal("stream should follow dm/group stream settings by default")
+	}
+
+	ch = &Channel{
+		config: config.SlackConfig{
+			DMStream:            &enabled,
+			GroupStream:         &enabled,
+			ThinkingPlaceholder: &disabled,
+		},
+		disableThinking: true,
+	}
+	if ch.StreamEnabled(false) || ch.StreamEnabled(true) {
+		t.Fatal("stream should be disabled when thinking placeholder is disabled")
 	}
 }

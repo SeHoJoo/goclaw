@@ -407,8 +407,8 @@ func TestCodexAdapter_ToRequestPromptCacheControls(t *testing.T) {
 	if got := payload["prompt_cache_key"]; got != "tenant/agent/session" {
 		t.Fatalf("prompt_cache_key = %v, want tenant/agent/session", got)
 	}
-	if got := payload["prompt_cache_retention"]; got != "1h" {
-		t.Fatalf("prompt_cache_retention = %v, want 1h", got)
+	if _, ok := payload["prompt_cache_retention"]; ok {
+		t.Fatal("prompt_cache_retention should not be sent to codex")
 	}
 }
 
