@@ -387,8 +387,11 @@ func (t *BridgeTool) enforceIdentityScopedArgs(ctx context.Context, args map[str
 		return args
 	}
 
-	userID := strings.TrimSpace(store.UserIDFromContext(ctx))
-	if !looksLikeEmail(userID) {
+	userEmail := strings.TrimSpace(store.UserIDFromContext(ctx))
+	if !looksLikeEmail(userEmail) {
+		userEmail = strings.TrimSpace(store.SenderEmailFromContext(ctx))
+	}
+	if !looksLikeEmail(userEmail) {
 		delete(args, "_mpclaw_user_email")
 		return args
 	}
@@ -396,7 +399,7 @@ func (t *BridgeTool) enforceIdentityScopedArgs(ctx context.Context, args map[str
 	if args == nil {
 		args = make(map[string]any, 1)
 	}
-	args["_mpclaw_user_email"] = strings.ToLower(userID)
+	args["_mpclaw_user_email"] = strings.ToLower(userEmail)
 	return args
 }
 

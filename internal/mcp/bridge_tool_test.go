@@ -345,6 +345,18 @@ func TestEnforceIdentityScopedArgs_MPClawOverridesPromptEmail(t *testing.T) {
 	}
 }
 
+func TestEnforceIdentityScopedArgs_MPClawFallsBackToTrustedSenderEmail(t *testing.T) {
+	bt := &BridgeTool{mpclawMode: true}
+
+	ctx := store.WithUserID(context.Background(), "U0AU1V9QXHA")
+	ctx = store.WithSenderEmail(ctx, "Real-User@Mailplug.com")
+	got := bt.enforceIdentityScopedArgs(ctx, map[string]any{"_mpclaw_user_email": "other-user@mailplug.com"})
+
+	if got["_mpclaw_user_email"] != "real-user@mailplug.com" {
+		t.Fatalf("expected trusted sender email to be used, got %v", got["_mpclaw_user_email"])
+	}
+}
+
 func TestEnforceIdentityScopedArgs_MPClawDropsPromptEmailWhenContextUserIsNotEmail(t *testing.T) {
 	bt := &BridgeTool{mpclawMode: true}
 

@@ -58,20 +58,19 @@ func (c *Channel) BlockReplyEnabled() *bool { return c.config.BlockReply }
 // ChatBehaviorConfig returns the per-channel chat_behavior override.
 func (c *Channel) ChatBehaviorConfig() *config.ChatBehaviorConfig { return c.config.ChatBehavior }
 
-// resolveDisplayName fetches and caches the Slack display name for a user ID.
-func (c *Channel) resolveDisplayName(userID string) string {
+func (c *Channel) resolveUserProfile(userID string) (displayName, email string) {
 	c.userCacheMu.RLock()
 	cu, found := c.userCache[userID]
 	c.userCacheMu.RUnlock()
 
 	if found && time.Since(cu.fetchedAt) < userCacheTTL {
-		return cu.displayName
+		return cu.displayName, cu.email
 	}
 
 	user, err := c.api.GetUserInfo(userID)
 	if err != nil {
 		slog.Debug("slack: failed to resolve user", "user_id", userID, "error", err)
-		return userID
+		return userID, ""
 	}
 
 	name := user.Profile.DisplayName
@@ -81,11 +80,18 @@ func (c *Channel) resolveDisplayName(userID string) string {
 	if name == "" {
 		name = user.Name
 	}
+	email = user.Profile.Email
 
 	c.userCacheMu.Lock()
-	c.userCache[userID] = cachedUser{displayName: name, fetchedAt: time.Now()}
+	c.userCache[userID] = cachedUser{displayName: name, email: email, fetchedAt: time.Now()}
 	c.userCacheMu.Unlock()
 
+	return name, email
+}
+
+// resolveDisplayName fetches and caches the Slack display name for a user ID.
+func (c *Channel) resolveDisplayName(userID string) string {
+	name, _ := c.resolveUserProfile(userID)
 	return name
 }
 

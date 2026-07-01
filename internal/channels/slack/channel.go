@@ -59,6 +59,7 @@ type Channel struct {
 
 type cachedUser struct {
 	displayName string
+	email       string
 	fetchedAt   time.Time
 }
 

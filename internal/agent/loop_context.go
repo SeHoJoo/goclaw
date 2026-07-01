@@ -67,6 +67,9 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 	if req.SenderName != "" {
 		ctx = store.WithSenderName(ctx, req.SenderName)
 	}
+	if req.SenderEmail != "" {
+		ctx = store.WithSenderEmail(ctx, req.SenderEmail)
+	}
 	// Inject caller role so RBAC-aware permission checks (CheckFileWriterPermission,
 	// CheckCronPermission) can bypass per-user grants for authenticated admins
 	// dispatched from dashboard or other trusted sources (#915).

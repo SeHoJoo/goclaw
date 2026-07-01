@@ -86,7 +86,7 @@ func (c *Channel) handleMessage(ev *slackevents.MessageEvent) {
 		peerKind = "direct"
 	}
 
-	displayName := c.resolveDisplayName(senderID)
+	displayName, senderEmail := c.resolveUserProfile(senderID)
 
 	// Policy check
 	if isDM {
@@ -257,6 +257,9 @@ func (c *Channel) handleMessage(ev *slackevents.MessageEvent) {
 		"local_key":       localKey,
 		"placeholder_key": localKey,
 	}
+	if senderEmail != "" {
+		metadata["user_email"] = senderEmail
+	}
 	if replyThreadTS != "" {
 		metadata["message_thread_id"] = replyThreadTS
 	}
@@ -292,7 +295,7 @@ func (c *Channel) fetchThreadParentContext(ctx context.Context, channelID, threa
 		ChannelID: channelID,
 		Latest:    threadTS,
 		Limit:     1,
-		Inclusive:  true,
+		Inclusive: true,
 	}
 	history, err := c.api.GetConversationHistoryContext(ctx, params)
 	if err != nil || len(history.Messages) == 0 {

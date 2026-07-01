@@ -465,6 +465,7 @@ func processNormalMessage(
 		SenderID:           effectiveSenderID,
 		Role:               effectiveRole,
 		SenderName:         resolveSenderName(msg),
+		SenderEmail:        msg.Metadata["user_email"],
 		RunID:              runID,
 		Stream:             providerStream,
 		HistoryLimit:       msg.HistoryLimit,

@@ -39,7 +39,7 @@ func (c *Channel) handleAppMention(ev *slackevents.AppMentionEvent) {
 	channelID := ev.Channel
 	content := ev.Text
 
-	displayName := c.resolveDisplayName(senderID)
+	displayName, senderEmail := c.resolveUserProfile(senderID)
 
 	if !c.checkGroupPolicy(ctx, senderID, channelID) {
 		return
@@ -93,6 +93,9 @@ func (c *Channel) handleAppMention(ev *slackevents.AppMentionEvent) {
 		"is_dm":           "false",
 		"local_key":       localKey,
 		"placeholder_key": localKey,
+	}
+	if senderEmail != "" {
+		metadata["user_email"] = senderEmail
 	}
 	if replyThreadTS != "" {
 		metadata["message_thread_id"] = replyThreadTS
