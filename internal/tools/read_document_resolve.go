@@ -232,6 +232,20 @@ func mimeFromDocExt(ext string) string {
 		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 	case ".csv":
 		return "text/csv"
+	case ".log":
+		return "text/plain"
+	case ".txt":
+		return "text/plain"
+	case ".md":
+		return "text/markdown"
+	case ".json":
+		return "application/json"
+	case ".yaml", ".yml":
+		return "application/yaml"
+	case ".xml":
+		return "application/xml"
+	case ".html", ".htm":
+		return "text/html"
 	case ".zip":
 		return "application/zip"
 	case ".tar":

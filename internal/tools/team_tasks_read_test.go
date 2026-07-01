@@ -121,6 +121,61 @@ func TestSearch_SatisfiesCreateGate(t *testing.T) {
 	}
 }
 
+func TestSearch_ParallelCallsShareCreateGateLock(t *testing.T) {
+	_, tool, _, _, ctx := newTestTeamSetup()
+	chatID := "parallel-search-lock"
+	ctx = WithToolChatID(ctx, chatID)
+
+	ptd := NewPendingTeamDispatch()
+	ctx = WithPendingTeamDispatch(ctx, ptd)
+
+	lock := getTeamCreateLock(testTeamID.String(), chatID)
+	lock.Lock()
+	prelocked := true
+	defer func() {
+		if prelocked {
+			lock.Unlock()
+		}
+		ptd.ReleaseTeamLock()
+	}()
+
+	started := make(chan struct{}, 2)
+	done := make(chan *Result, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			started <- struct{}{}
+			done <- tool.Execute(ctx, map[string]any{"action": "search", "query": "test"})
+		}()
+	}
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for parallel searches to start")
+		}
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	lock.Unlock()
+	prelocked = false
+
+	for i := 0; i < 2; i++ {
+		select {
+		case result := <-done:
+			if result.IsError {
+				t.Fatalf("unexpected search error: %s", result.ForLLM)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("parallel search calls deadlocked on the create gate lock")
+		}
+	}
+
+	if !ptd.HasListed() {
+		t.Fatal("expected parallel search to satisfy create gate")
+	}
+}
+
 func TestGet_CrossTeamBlocked(t *testing.T) {
 	mb, tool, _, _, ctx := newTestTeamSetup()
 

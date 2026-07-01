@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -156,23 +157,36 @@ func (h *ChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	runID := uuid.NewString()
-	// Include userID in session key for multi-tenant isolation
-	sessionSuffix := "http-" + runID[:8]
-	if userID != "" {
-		sessionSuffix = "http-" + userID + "-" + runID[:8]
-	}
-	sessionKey := sessions.SessionKey(agentID, sessionSuffix)
+	sessionKey := extractSessionKey(r, agentID, userID, runID)
+	localKey := extractRunLocalKey(r)
+	peerKind := extractRunPeerKind(r)
 
 	slog.Info("chat completions request", "agent", agentID, "stream", req.Stream, "user", userID)
 
 	if req.Stream {
-		h.handleStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID)
+		h.handleStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID, localKey, peerKind)
 	} else {
-		h.handleNonStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID)
+		h.handleNonStream(w, r, loop, runID, sessionKey, lastMessage, req.Model, userID, localKey, peerKind)
 	}
 }
 
-func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID string) {
+func extractSessionKey(r *http.Request, agentID, userID, runID string) string {
+	for _, header := range []string{"X-GoClaw-Session-Key", "X-Session-Key"} {
+		if key := strings.TrimSpace(r.Header.Get(header)); key != "" {
+			return key
+		}
+	}
+
+	// Include userID in session key for multi-tenant isolation when the caller
+	// did not provide an explicit session key.
+	sessionSuffix := "http-" + runID[:8]
+	if userID != "" {
+		sessionSuffix = "http-" + userID + "-" + runID[:8]
+	}
+	return sessions.SessionKey(agentID, sessionSuffix)
+}
+
+func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID, localKey, peerKind string) {
 	ctx, drainTeamDispatch := tools.InjectTeamDispatch(r.Context(), h.postTurn)
 	defer drainTeamDispatch()
 
@@ -183,6 +197,8 @@ func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.
 		ChatID:     "api",
 		RunID:      runID,
 		UserID:     userID,
+		LocalKey:   localKey,
+		PeerKind:   peerKind,
 		Stream:     false,
 	})
 
@@ -216,7 +232,7 @@ func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID string) {
+func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID, localKey, peerKind string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		locale := store.LocaleFromContext(r.Context())
@@ -244,6 +260,8 @@ func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Req
 		ChatID:     "api",
 		RunID:      runID,
 		UserID:     userID,
+		LocalKey:   localKey,
+		PeerKind:   peerKind,
 		Stream:     true,
 	})
 

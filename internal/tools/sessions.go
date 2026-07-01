@@ -203,3 +203,63 @@ func (t *SessionStatusTool) Execute(ctx context.Context, args map[string]any) *R
 
 	return SilentResult(strings.Join(lines, "\n"))
 }
+
+// ============================================================
+// sessions_reset
+// ============================================================
+
+type SessionsResetTool struct {
+	sessions store.SessionStore
+}
+
+func NewSessionsResetTool() *SessionsResetTool { return &SessionsResetTool{} }
+
+func (t *SessionsResetTool) SetSessionStore(s store.SessionStore) { t.sessions = s }
+
+func (t *SessionsResetTool) Name() string { return "sessions_reset" }
+func (t *SessionsResetTool) Description() string {
+	return "Reset a session by clearing its message history and summary."
+}
+
+func (t *SessionsResetTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"session_key": map[string]any{
+				"type":        "string",
+				"description": "Session key to reset (default: current session)",
+			},
+		},
+	}
+}
+
+func (t *SessionsResetTool) Execute(ctx context.Context, args map[string]any) *Result {
+	if t.sessions == nil {
+		return ErrorResult("session store not available")
+	}
+
+	sessionKey, _ := args["session_key"].(string)
+	if sessionKey == "" {
+		sessionKey = ToolSandboxKeyFromCtx(ctx)
+	}
+	if sessionKey == "" {
+		return ErrorResult("session_key is required")
+	}
+
+	agentKey := ToolAgentKeyFromCtx(ctx)
+	if agentKey == "" {
+		return ErrorResult("agent context required")
+	}
+	if !strings.HasPrefix(sessionKey, "agent:"+agentKey+":") {
+		return ErrorResult("access denied: session belongs to a different agent")
+	}
+
+	currentSession := ToolSandboxKeyFromCtx(ctx)
+	if currentSession != "" && !isSessionInScope(ctx, sessionKey, currentSession) {
+		return ErrorResult("access denied: session outside current scope")
+	}
+
+	t.sessions.Reset(ctx, sessionKey)
+
+	return SilentResult("ok")
+}
