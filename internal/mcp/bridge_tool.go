@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/mail"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -39,9 +40,9 @@ func argMapKeys(m map[string]any) string {
 // safe reconnection without data races.
 type BridgeTool struct {
 	serverName        string
-	serverID          uuid.UUID    // MCP server ID (for grant recheck)
-	toolName          string       // original MCP tool name
-	registeredName    string       // may include prefix: "{prefix}__{toolName}"
+	serverID          uuid.UUID // MCP server ID (for grant recheck)
+	toolName          string    // original MCP tool name
+	registeredName    string    // may include prefix: "{prefix}__{toolName}"
 	description       string
 	descriptionSuffix string         // admin-authored hints appended to description (see WithHints)
 	inputSchema       map[string]any // JSON Schema for parameters
@@ -50,6 +51,7 @@ type BridgeTool struct {
 	timeoutSec        int
 	connected         *atomic.Bool
 	grantChecker      GrantChecker // for runtime grant recheck (nil = skip check)
+	mpclawMode        bool         // inject trusted mp-claw caller metadata into hidden MCP args
 	// forceReconnect triggers an out-of-band Initialize when Execute detects
 	// the server reset its session lifecycle. Optional — nil falls back to
 	// "connected=false + wait for health loop". Wired via WithForceReconnect.
@@ -123,6 +125,13 @@ func (t *BridgeTool) Description() string {
 	return t.description + t.descriptionSuffix
 }
 func (t *BridgeTool) Parameters() map[string]any { return t.inputSchema }
+
+// WithMPClawMode enables hidden caller identity injection for MCP servers that
+// authenticate through mp-claw's shared auth-proxy mode.
+func (t *BridgeTool) WithMPClawMode(enabled bool) *BridgeTool {
+	t.mpclawMode = enabled
+	return t
+}
 
 // WithForceReconnect attaches a callback used when Execute detects the
 // server reset its session lifecycle (see isSessionUninitializedErr).
@@ -224,6 +233,7 @@ func (t *BridgeTool) Execute(ctx context.Context, args map[string]any) *tools.Re
 	// instead of omitting them, causing MCP servers to reject invalid values
 	// (e.g. empty string for UUID fields).
 	cleanedArgs := t.stripEmptyOptionalArgs(args)
+	cleanedArgs = t.enforceIdentityScopedArgs(ctx, cleanedArgs)
 
 	req := mcpgo.CallToolRequest{}
 	req.Params.Name = t.toolName
@@ -368,6 +378,28 @@ func (t *BridgeTool) stripEmptyOptionalArgs(args map[string]any) map[string]any 
 	return cleaned
 }
 
+// enforceIdentityScopedArgs overwrites identity-scoped MCP args with values from
+// the authenticated tool context so prompts cannot redirect execution to a
+// different user's credentials. mp-claw mode uses a hidden MCP arg because the
+// email must not be exposed in the public tool schema.
+func (t *BridgeTool) enforceIdentityScopedArgs(ctx context.Context, args map[string]any) map[string]any {
+	if !t.mpclawMode {
+		return args
+	}
+
+	userID := strings.TrimSpace(store.UserIDFromContext(ctx))
+	if !looksLikeEmail(userID) {
+		delete(args, "_mpclaw_user_email")
+		return args
+	}
+
+	if args == nil {
+		args = make(map[string]any, 1)
+	}
+	args["_mpclaw_user_email"] = strings.ToLower(userID)
+	return args
+}
+
 // propertyType returns the JSON Schema "type" for a property, or "" if unknown.
 func (t *BridgeTool) propertyType(name string) string {
 	props, _ := t.inputSchema["properties"].(map[string]any)
@@ -436,6 +468,14 @@ func isAllCapsPlaceholder(s string) bool {
 		}
 	}
 	return true
+}
+
+func looksLikeEmail(value string) bool {
+	if value == "" || strings.ContainsAny(value, " \r\n\t") {
+		return false
+	}
+	addr, err := mail.ParseAddress(value)
+	return err == nil && strings.EqualFold(addr.Address, value)
 }
 
 // wrapMCPContent wraps MCP tool results as external/untrusted content.
