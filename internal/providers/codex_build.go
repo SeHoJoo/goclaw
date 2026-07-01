@@ -113,6 +113,9 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 		var tools []map[string]any
 		for _, t := range req.Tools {
 			if t.Type == "image_generation" {
+				if !codexModelSupportsNativeImageGeneration(model) {
+					continue
+				}
 				// Pass native image_generation tool object as-is — Responses API first-class tool.
 				// Defaults chosen for Phase 1b; per-agent overrides are Phase 4.
 				tools = append(tools, map[string]any{
@@ -133,7 +136,9 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 				})
 			}
 		}
-		body["tools"] = tools
+		if len(tools) > 0 {
+			body["tools"] = tools
+		}
 	}
 
 	if level, ok := req.Options[OptThinkingLevel].(string); ok && level != "" && level != "off" {
@@ -145,6 +150,10 @@ func (p *CodexProvider) buildRequestBody(req ChatRequest, stream bool) map[strin
 	}
 
 	return body
+}
+
+func codexModelSupportsNativeImageGeneration(model string) bool {
+	return !strings.Contains(strings.ToLower(model), "codex-spark")
 }
 
 func (p *CodexProvider) doRequest(ctx context.Context, body any) (io.ReadCloser, error) {

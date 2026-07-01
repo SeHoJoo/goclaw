@@ -1047,6 +1047,51 @@ func TestCodexBuildRequestBodyMixedTools(t *testing.T) {
 	}
 }
 
+func TestCodexBuildRequestBodySkipsImageGenerationForSpark(t *testing.T) {
+	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "gpt-5.3-codex-spark")
+
+	req := ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Search only"}},
+		Tools: []ToolDefinition{
+			{Type: "image_generation"},
+			{
+				Type: "function",
+				Function: &ToolFunctionSchema{
+					Name:        "web_search",
+					Description: "Search the web",
+					Parameters:  map[string]any{"type": "object"},
+				},
+			},
+		},
+	}
+
+	body := p.buildRequestBody(req, false)
+
+	tools, ok := body["tools"].([]map[string]any)
+	if !ok {
+		t.Fatalf("tools is not []map[string]any: %T", body["tools"])
+	}
+	if len(tools) != 1 {
+		t.Fatalf("tools length = %d, want 1", len(tools))
+	}
+	if tools[0]["type"] != "function" || tools[0]["name"] != "web_search" {
+		t.Fatalf("tools[0] = %v, want web_search function", tools[0])
+	}
+}
+
+func TestCodexBuildRequestBodyOmitsToolsWhenOnlyUnsupportedImageGeneration(t *testing.T) {
+	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "gpt-5.3-codex-spark")
+
+	body := p.buildRequestBody(ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hello"}},
+		Tools:    []ToolDefinition{{Type: "image_generation"}},
+	}, false)
+
+	if _, ok := body["tools"]; ok {
+		t.Fatal("tools should be omitted when spark only has unsupported image_generation")
+	}
+}
+
 // Verify request body includes image content
 func TestCodexProviderBuildRequestBodyWithImages(t *testing.T) {
 	p := NewCodexProvider("test", &staticTokenSource{token: "test"}, "", "gpt-4o")
