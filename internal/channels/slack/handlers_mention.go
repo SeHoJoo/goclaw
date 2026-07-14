@@ -40,7 +40,7 @@ func (c *Channel) handleAppMention(ev *slackevents.AppMentionEvent) {
 	channelID := ev.Channel
 	content := ev.Text
 
-	displayName := c.resolveDisplayName(senderID)
+	displayName, senderEmail := c.resolveUserProfile(senderID)
 
 	if !c.checkGroupPolicy(ctx, senderID, channelID) {
 		return
@@ -68,16 +68,18 @@ func (c *Channel) handleAppMention(ev *slackevents.AppMentionEvent) {
 		replyThreadTS = ev.TimeStamp
 	}
 
-	placeholderOpts := []slackapi.MsgOption{
-		slackapi.MsgOptionText("Thinking...", false),
-	}
-	if replyThreadTS != "" {
-		placeholderOpts = append(placeholderOpts, slackapi.MsgOptionTS(replyThreadTS))
-	}
+	if !c.disableThinking {
+		placeholderOpts := []slackapi.MsgOption{
+			slackapi.MsgOptionText("Thinking...", false),
+		}
+		if replyThreadTS != "" {
+			placeholderOpts = append(placeholderOpts, slackapi.MsgOptionTS(replyThreadTS))
+		}
 
-	_, placeholderTS, err := c.api.PostMessage(channelID, placeholderOpts...)
-	if err == nil {
-		c.placeholders.Store(localKey, placeholderTS)
+		_, placeholderTS, err := c.api.PostMessage(channelID, placeholderOpts...)
+		if err == nil {
+			c.placeholders.Store(localKey, placeholderTS)
+		}
 	}
 
 	annotated := fmt.Sprintf("[From: %s]\n%s", displayName, content)
@@ -94,6 +96,9 @@ func (c *Channel) handleAppMention(ev *slackevents.AppMentionEvent) {
 		"is_dm":           "false",
 		"local_key":       localKey,
 		"placeholder_key": localKey,
+	}
+	if senderEmail != "" {
+		metadata["user_email"] = senderEmail
 	}
 	if replyThreadTS != "" {
 		metadata["message_thread_id"] = replyThreadTS

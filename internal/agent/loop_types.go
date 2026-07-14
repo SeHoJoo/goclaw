@@ -622,6 +622,7 @@ type RunRequest struct {
 	UserID                     string             // external user ID (TEXT, free-form) for multi-tenant scoping
 	SenderID                   string             // original individual sender ID (preserved in group chats for permission checks)
 	SenderName                 string             // display name from channel metadata (for bootstrap auto-contact)
+	SenderEmail                string             // trusted sender email from channel metadata, if available
 	Role                       string             // caller's RBAC role (admin/operator/viewer/owner); bypasses per-user grants for authenticated admins (#915)
 	Stream                     bool               // whether to stream response chunks
 	ExtraSystemPrompt          string             // optional: injected into system prompt (skills, subagent context, etc.)

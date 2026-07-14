@@ -591,10 +591,11 @@ const ctxPendingDispatch toolContextKey = "tool_pending_team_dispatch"
 // After the turn ends, the consumer drains and dispatches them.
 // Thread-safe: tools may execute in parallel goroutines.
 type PendingTeamDispatch struct {
-	mu       sync.Mutex
-	tasks    map[uuid.UUID][]uuid.UUID // teamID → []taskID
-	listed   bool                      // true after list called in this turn
-	teamLock *sync.Mutex               // acquired on list, released before post-turn dispatch
+	mu            sync.Mutex
+	tasks         map[uuid.UUID][]uuid.UUID // teamID → []taskID
+	listed        bool                      // true after list/search gate starts in this turn
+	teamLock      *sync.Mutex               // acquired on list/search, released before post-turn dispatch
+	teamLockReady chan struct{}             // closed after the lock is acquired for this turn
 }
 
 func NewPendingTeamDispatch() *PendingTeamDispatch {
@@ -635,6 +636,37 @@ func (p *PendingTeamDispatch) HasListed() bool {
 func (p *PendingTeamDispatch) SetTeamLock(m *sync.Mutex) {
 	p.mu.Lock()
 	p.teamLock = m
+	p.mu.Unlock()
+}
+
+// EnsureTeamLock acquires the per-team/chat create lock once per turn.
+// Parallel list/search calls in the same LLM turn must not each wait on the same
+// mutex; otherwise one call holds the lock until post-turn while siblings block
+// the turn from finishing.
+func (p *PendingTeamDispatch) EnsureTeamLock(lock *sync.Mutex) {
+	p.mu.Lock()
+	if p.listed {
+		ready := p.teamLockReady
+		p.mu.Unlock()
+		if ready != nil {
+			<-ready
+		}
+		return
+	}
+
+	p.listed = true
+	p.teamLock = lock
+	ready := make(chan struct{})
+	p.teamLockReady = ready
+	p.mu.Unlock()
+
+	lock.Lock()
+
+	p.mu.Lock()
+	if p.teamLockReady == ready {
+		close(ready)
+		p.teamLockReady = nil
+	}
 	p.mu.Unlock()
 }
 

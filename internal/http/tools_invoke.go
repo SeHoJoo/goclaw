@@ -96,11 +96,19 @@ func (h *ToolsInvokeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if agentIDStr == "" {
 		agentIDStr = extractAgentID(r, "")
 	}
-	if agentIDStr != "" && h.agentStore != nil {
-		ag, err := h.agentStore.GetByKey(ctx, agentIDStr)
-		if err == nil {
-			ctx = store.WithAgentID(ctx, ag.ID)
+	if agentIDStr != "" {
+		ctx = tools.WithToolAgentKey(ctx, agentIDStr)
+		if h.agentStore != nil {
+			ag, err := h.agentStore.GetByKey(ctx, agentIDStr)
+			if err == nil {
+				ctx = store.WithAgentID(ctx, ag.ID)
+			}
 		}
+	}
+
+	if req.SessionKey != "" {
+		ctx = tools.WithToolSandboxKey(ctx, req.SessionKey)
+		ctx = tools.WithToolSessionKey(ctx, req.SessionKey)
 	}
 
 	// Inject tool context keys (channel, chatID, peerKind) for message routing.

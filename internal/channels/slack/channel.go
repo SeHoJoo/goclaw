@@ -49,16 +49,18 @@ type Channel struct {
 	userCacheMu sync.RWMutex
 	userCache   map[string]cachedUser
 
-	debounceDelay time.Duration
-	threadTTL     time.Duration  // thread participation expiry (0 = disabled)
-	wg            sync.WaitGroup // tracks goroutines for clean shutdown
-	cancelFn      context.CancelFunc
+	debounceDelay   time.Duration
+	threadTTL       time.Duration // thread participation expiry (0 = disabled)
+	disableThinking bool
+	wg              sync.WaitGroup // tracks goroutines for clean shutdown
+	cancelFn        context.CancelFunc
 	// pairingService, pairingDebounce, approvedGroups, groupHistory, historyLimit, requireMention
 	// are inherited from channels.BaseChannel.
 }
 
 type cachedUser struct {
 	displayName string
+	email       string
 	fetchedAt   time.Time
 }
 
@@ -118,13 +120,16 @@ func New(cfg config.SlackConfig, msgBus *bus.MessageBus, pairingSvc store.Pairin
 		}
 	}
 
+	disableThinking := cfg.ThinkingPlaceholder != nil && !*cfg.ThinkingPlaceholder
+
 	ch := &Channel{
-		BaseChannel:    base,
-		config:         cfg,
-		debounceDelay:  debounceDelay,
-		threadTTL:      threadTTL,
-		debounceTimers: make(map[string]*debounceEntry),
-		userCache:      make(map[string]cachedUser),
+		BaseChannel:     base,
+		config:          cfg,
+		debounceDelay:   debounceDelay,
+		threadTTL:       threadTTL,
+		disableThinking: disableThinking,
+		debounceTimers:  make(map[string]*debounceEntry),
+		userCache:       make(map[string]cachedUser),
 	}
 	ch.SetRequireMention(requireMention)
 	ch.SetPairingService(pairingSvc)

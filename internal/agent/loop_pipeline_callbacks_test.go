@@ -80,8 +80,8 @@ func TestPromptCacheOptionsHelpers(t *testing.T) {
 	if opts[providers.OptPromptCacheKey] != key1 {
 		t.Fatalf("prompt cache key = %v, want %s", opts[providers.OptPromptCacheKey], key1)
 	}
-	if opts[providers.OptPromptCacheRetention] != "24h" {
-		t.Fatalf("prompt cache retention = %v, want 24h", opts[providers.OptPromptCacheRetention])
+	if _, ok := opts[providers.OptPromptCacheRetention]; ok {
+		t.Fatal("prompt cache retention should not default for codex")
 	}
 
 	opts = map[string]any{

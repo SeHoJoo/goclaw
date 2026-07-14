@@ -1,11 +1,13 @@
 package mcp
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 )
 
 func TestInputSchemaToMap(t *testing.T) {
@@ -481,5 +483,84 @@ func TestEnsureMCPPrefix(t *testing.T) {
 				t.Errorf("ensureMCPPrefix(%q, %q) = %q, want %q", tt.prefix, tt.serverName, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEnforceIdentityScopedArgs_MPClawInjectsHiddenUserEmail(t *testing.T) {
+	bt := &BridgeTool{
+		mpclawMode: true,
+		inputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"jql": map[string]any{"type": "string"}},
+		},
+	}
+
+	ctx := store.WithUserID(context.Background(), "Real-User@Mailplug.com")
+	got := bt.enforceIdentityScopedArgs(ctx, map[string]any{"jql": "assignee=currentUser()"})
+
+	if got["_mpclaw_user_email"] != "real-user@mailplug.com" {
+		t.Fatalf("expected hidden mpclaw email arg from context, got %v", got["_mpclaw_user_email"])
+	}
+	if got["jql"] != "assignee=currentUser()" {
+		t.Fatalf("expected original args to be preserved, got %v", got["jql"])
+	}
+}
+
+func TestEnforceIdentityScopedArgs_MPClawOverridesPromptEmail(t *testing.T) {
+	bt := &BridgeTool{mpclawMode: true}
+
+	ctx := store.WithUserID(context.Background(), "real-user@mailplug.com")
+	got := bt.enforceIdentityScopedArgs(ctx, map[string]any{"_mpclaw_user_email": "other-user@mailplug.com"})
+
+	if got["_mpclaw_user_email"] != "real-user@mailplug.com" {
+		t.Fatalf("expected prompt supplied mpclaw email to be overwritten, got %v", got["_mpclaw_user_email"])
+	}
+}
+
+func TestEnforceIdentityScopedArgs_MPClawFallsBackToTrustedSenderEmail(t *testing.T) {
+	bt := &BridgeTool{mpclawMode: true}
+
+	ctx := store.WithUserID(context.Background(), "U0AU1V9QXHA")
+	ctx = store.WithSenderEmail(ctx, "Real-User@Mailplug.com")
+	got := bt.enforceIdentityScopedArgs(ctx, map[string]any{"_mpclaw_user_email": "other-user@mailplug.com"})
+
+	if got["_mpclaw_user_email"] != "real-user@mailplug.com" {
+		t.Fatalf("expected trusted sender email to be used, got %v", got["_mpclaw_user_email"])
+	}
+}
+
+func TestEnforceIdentityScopedArgs_MPClawDropsPromptEmailWhenContextUserIsNotEmail(t *testing.T) {
+	bt := &BridgeTool{mpclawMode: true}
+
+	ctx := store.WithUserID(context.Background(), "group:telegram:111")
+	got := bt.enforceIdentityScopedArgs(ctx, map[string]any{
+		"_mpclaw_user_email": "other-user@mailplug.com",
+		"jql":                "project = SY",
+	})
+
+	if _, ok := got["_mpclaw_user_email"]; ok {
+		t.Fatalf("expected prompt supplied mpclaw email to be removed, got %v", got["_mpclaw_user_email"])
+	}
+	if got["jql"] != "project = SY" {
+		t.Fatalf("expected original args to be preserved, got %v", got["jql"])
+	}
+}
+
+func TestLooksLikeEmail(t *testing.T) {
+	tests := []struct {
+		value string
+		want  bool
+	}{
+		{value: "user@mailplug.com", want: true},
+		{value: "USER@mailplug.com", want: true},
+		{value: "group:telegram:111", want: false},
+		{value: "user mailplug.com", want: false},
+		{value: "", want: false},
+	}
+
+	for _, tt := range tests {
+		if got := looksLikeEmail(tt.value); got != tt.want {
+			t.Fatalf("looksLikeEmail(%q) = %v, want %v", tt.value, got, tt.want)
+		}
 	}
 }

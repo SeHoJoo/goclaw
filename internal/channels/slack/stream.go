@@ -70,6 +70,9 @@ func (s *slackStream) MsgTS() string {
 
 // StreamEnabled reports whether streaming is active for DMs or groups.
 func (c *Channel) StreamEnabled(isGroup bool) bool {
+	if c.disableThinking {
+		return false
+	}
 	if isGroup {
 		return c.config.GroupStream != nil && *c.config.GroupStream
 	}

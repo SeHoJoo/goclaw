@@ -58,6 +58,7 @@ func wireExtraTools(
 	// Session tools (list, status, history, send)
 	toolsReg.Register(tools.NewSessionsListTool())
 	toolsReg.Register(tools.NewSessionStatusTool())
+	toolsReg.Register(tools.NewSessionsResetTool())
 	toolsReg.Register(tools.NewSessionsHistoryTool())
 	toolsReg.Register(tools.NewSessionsSendTool())
 
@@ -134,7 +135,7 @@ func wireExtraTools(
 	hasMemory = true
 
 	// Wire SessionStoreAware + BusAware on session tools
-	for _, name := range []string{"sessions_list", "session_status", "sessions_history", "sessions_send"} {
+	for _, name := range []string{"sessions_list", "session_status", "sessions_reset", "sessions_history", "sessions_send"} {
 		if t, ok := toolsReg.Get(name); ok {
 			if sa, ok := t.(tools.SessionStoreAware); ok {
 				sa.SetSessionStore(pgStores.Sessions)

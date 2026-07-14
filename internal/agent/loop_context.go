@@ -67,6 +67,9 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 	if req.SenderName != "" {
 		ctx = store.WithSenderName(ctx, req.SenderName)
 	}
+	if req.SenderEmail != "" {
+		ctx = store.WithSenderEmail(ctx, req.SenderEmail)
+	}
 	// Inject caller role so RBAC-aware permission checks (CheckFileWriterPermission,
 	// CheckCronPermission) can bypass per-user grants for authenticated admins
 	// dispatched from dashboard or other trusted sources (#915).
@@ -232,6 +235,7 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 	// Team workspace: auto-resolve for agents with team membership (not dispatched).
 	// Lead agents default to team workspace; non-lead members keep own workspace.
 	var resolvedTeamSettings json.RawMessage
+	var resolvedTeamID *string
 	// Dispatched tasks already have TeamWorkspace set but still need team settings
 	// for TeamIsolated flag. Fetch by explicit TeamID in that branch.
 	if req.TeamWorkspace != "" && req.TeamID != "" && l.teamStore != nil {
@@ -245,6 +249,9 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 		if team, _ := l.teamStore.GetTeamForAgent(ctx, l.agentUUID); team != nil {
 			resolvedTeamSettings = team.Settings
 			wsChat := req.ChatID
+			if wsChat == "" {
+				wsChat = req.WorkspaceChatID
+			}
 			if wsChat == "" {
 				wsChat = req.UserID
 			}
@@ -273,10 +280,16 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 				tools.TeamLayer(team.ID),
 			)
 			ctx = tools.WithToolTeamRoot(ctx, teamRoot)
-			// Leader keeps personal workspace (set at line 110-132) as default.
-			// Team workspace accessible via ToolTeamWorkspaceFromCtx for delegation.
+			if team.LeadAgentID == l.agentUUID {
+				// Team leads should default to the team workspace so relative
+				// paths, exec working_dir, and attachment handling all resolve
+				// consistently against the shared channel scope.
+				ctx = tools.WithToolWorkspace(ctx, wsDir)
+			}
 			if req.TeamID == "" {
-				ctx = tools.WithToolTeamID(ctx, team.ID.String())
+				teamID := team.ID.String()
+				resolvedTeamID = &teamID
+				ctx = tools.WithToolTeamID(ctx, teamID)
 			}
 		}
 	}
@@ -286,6 +299,8 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 		var teamIDPtr *string
 		if req.TeamID != "" {
 			teamIDPtr = &req.TeamID
+		} else if resolvedTeamID != nil {
+			teamIDPtr = resolvedTeamID
 		}
 		var teamWSConfig *workspace.TeamWorkspaceConfig
 		if resolvedTeamSettings != nil {

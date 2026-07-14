@@ -50,6 +50,8 @@ const (
 	CredentialUserIDKey contextKey = "goclaw_credential_user_id"
 	// SenderNameKey is the display name from channel metadata (for bootstrap auto-contact).
 	SenderNameKey contextKey = "goclaw_sender_name"
+	// SenderEmailKey is the verified sender email supplied by a trusted channel adapter.
+	SenderEmailKey contextKey = "goclaw_sender_email"
 	// ChannelContextScopeKey carries the channel/group/user scope for runtime grants and credentials.
 	ChannelContextScopeKey contextKey = "goclaw_channel_context_scope"
 	// AgentAudioKey carries the immutable agent audio snapshot for TTS tool dispatch.
@@ -197,9 +199,20 @@ func WithSenderName(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, SenderNameKey, name)
 }
 
+// WithSenderEmail returns a new context with the sender email resolved by a trusted channel adapter.
+func WithSenderEmail(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, SenderEmailKey, email)
+}
+
 // SenderNameFromContext extracts the sender display name. Returns "" if not set.
 func SenderNameFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(SenderNameKey).(string)
+	return v
+}
+
+// SenderEmailFromContext extracts the trusted sender email. Returns "" if not set.
+func SenderEmailFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(SenderEmailKey).(string)
 	return v
 }
 

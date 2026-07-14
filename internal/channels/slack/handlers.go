@@ -86,7 +86,7 @@ func (c *Channel) handleMessage(ev *slackevents.MessageEvent) {
 		peerKind = "direct"
 	}
 
-	displayName := c.resolveDisplayName(senderID)
+	displayName, senderEmail := c.resolveUserProfile(senderID)
 
 	// Policy check
 	if isDM {
@@ -212,16 +212,18 @@ func (c *Channel) handleMessage(ev *slackevents.MessageEvent) {
 		replyThreadTS = ev.TimeStamp // start thread from the triggering message
 	}
 
-	placeholderOpts := []slackapi.MsgOption{
-		slackapi.MsgOptionText("Thinking...", false),
-	}
-	if replyThreadTS != "" {
-		placeholderOpts = append(placeholderOpts, slackapi.MsgOptionTS(replyThreadTS))
-	}
+	if !c.disableThinking {
+		placeholderOpts := []slackapi.MsgOption{
+			slackapi.MsgOptionText("Thinking...", false),
+		}
+		if replyThreadTS != "" {
+			placeholderOpts = append(placeholderOpts, slackapi.MsgOptionTS(replyThreadTS))
+		}
 
-	_, placeholderTS, err := c.api.PostMessage(channelID, placeholderOpts...)
-	if err == nil {
-		c.placeholders.Store(localKey, placeholderTS)
+		_, placeholderTS, err := c.api.PostMessage(channelID, placeholderOpts...)
+		if err == nil {
+			c.placeholders.Store(localKey, placeholderTS)
+		}
 	}
 
 	// Build final content with group history context
@@ -248,6 +250,9 @@ func (c *Channel) handleMessage(ev *slackevents.MessageEvent) {
 		"is_dm":           fmt.Sprintf("%t", isDM),
 		"local_key":       localKey,
 		"placeholder_key": localKey,
+	}
+	if senderEmail != "" {
+		metadata["user_email"] = senderEmail
 	}
 	if replyThreadTS != "" {
 		metadata["message_thread_id"] = replyThreadTS

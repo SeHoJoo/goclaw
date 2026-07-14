@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,17 +107,19 @@ func (h *ResponsesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sessionSuffix = "responses-" + userID + "-" + runID[:8]
 	}
 	sessionKey := sessions.SessionKey(agentID, sessionSuffix)
+	localKey := strings.TrimSpace(r.Header.Get("X-GoClaw-Local-Key"))
+	peerKind := strings.TrimSpace(r.Header.Get("X-GoClaw-Peer-Kind"))
 
 	slog.Info("responses request", "agent", agentID, "stream", req.Stream, "user", userID)
 
 	if req.Stream {
-		h.handleStream(w, r, loop, runID, responseID, sessionKey, lastMessage, userID)
+		h.handleStream(w, r, loop, runID, responseID, sessionKey, lastMessage, userID, localKey, peerKind)
 	} else {
-		h.handleNonStream(w, r, loop, runID, responseID, sessionKey, lastMessage, userID)
+		h.handleNonStream(w, r, loop, runID, responseID, sessionKey, lastMessage, userID, localKey, peerKind)
 	}
 }
 
-func (h *ResponsesHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, responseID, sessionKey, message, userID string) {
+func (h *ResponsesHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, responseID, sessionKey, message, userID, localKey, peerKind string) {
 	ctx, drainTeamDispatch := tools.InjectTeamDispatch(r.Context(), h.postTurn)
 	defer drainTeamDispatch()
 
@@ -127,6 +130,8 @@ func (h *ResponsesHandler) handleNonStream(w http.ResponseWriter, r *http.Reques
 		ChatID:     "api",
 		RunID:      runID,
 		UserID:     userID,
+		LocalKey:   localKey,
+		PeerKind:   peerKind,
 		Stream:     false,
 	})
 
@@ -157,7 +162,7 @@ func (h *ResponsesHandler) handleNonStream(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (h *ResponsesHandler) handleStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, responseID, sessionKey, message, userID string) {
+func (h *ResponsesHandler) handleStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, responseID, sessionKey, message, userID, localKey, peerKind string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -189,6 +194,8 @@ func (h *ResponsesHandler) handleStream(w http.ResponseWriter, r *http.Request, 
 		ChatID:     "api",
 		RunID:      runID,
 		UserID:     userID,
+		LocalKey:   localKey,
+		PeerKind:   peerKind,
 		Stream:     true,
 	})
 

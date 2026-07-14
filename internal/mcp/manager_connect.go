@@ -116,7 +116,7 @@ func (m *Manager) connectServer(ctx context.Context, name, transportType, comman
 	}
 
 	// Register tools (filtered by grant's tool_allow/tool_deny upfront)
-	registeredNames := m.registerBridgeTools(ss, mcpTools, name, toolPrefix, timeoutSec, serverID, hints, toolAllow, toolDeny)
+	registeredNames := m.registerBridgeTools(ss, mcpTools, name, toolPrefix, timeoutSec, serverID, hints, toolAllow, toolDeny, isMPClawMode(env))
 	ss.toolNames = registeredNames
 
 	// Cache tool descriptions + parameter schemas for prompt preview (no live connection needed)
@@ -164,7 +164,7 @@ func (m *Manager) connectServer(ctx context.Context, name, transportType, comman
 // never get a BridgeTool created — the LLM never sees them, eliminating the
 // "registered then runtime-denied" loop that produced repeated grant-revoked
 // errors. Pass nil/nil to register every discovered tool.
-func (m *Manager) registerBridgeTools(ss *serverState, mcpTools []mcpgo.Tool, serverName, toolPrefix string, timeoutSec int, serverID uuid.UUID, hints ToolHints, toolAllow, toolDeny []string) []string {
+func (m *Manager) registerBridgeTools(ss *serverState, mcpTools []mcpgo.Tool, serverName, toolPrefix string, timeoutSec int, serverID uuid.UUID, hints ToolHints, toolAllow, toolDeny []string, mpclawMode bool) []string {
 	var registeredNames []string
 	var filteredOut []string
 	for _, mcpTool := range mcpTools {
@@ -174,6 +174,7 @@ func (m *Manager) registerBridgeTools(ss *serverState, mcpTools []mcpgo.Tool, se
 		}
 
 		bt := NewBridgeTool(serverName, mcpTool, &ss.clientPtr, toolPrefix, timeoutSec, &ss.connected, serverID, m.grantChecker).
+			WithMPClawMode(mpclawMode).
 			WithHints(hints.Global, hints.HintFor(mcpTool.Name)).
 			WithForceReconnect(func(reason string) { ss.requestForceReconnect(reason) })
 
@@ -216,7 +217,7 @@ func (m *Manager) connectViaPool(ctx context.Context, tenantID uuid.UUID, name, 
 	}
 
 	// Create per-agent BridgeTools from the pool's shared connection
-	registeredNames := m.registerPoolBridgeTools(entry, name, toolPrefix, timeoutSec, serverID, hints, toolAllow, toolDeny)
+	registeredNames := m.registerPoolBridgeTools(entry, name, toolPrefix, timeoutSec, serverID, hints, toolAllow, toolDeny, isMPClawMode(env))
 
 	// Cache tool descriptions + parameter schemas for prompt preview (no live connection needed)
 	if serverID != uuid.Nil && m.store != nil && len(entry.tools) > 0 {
@@ -269,7 +270,7 @@ func (m *Manager) connectViaPool(ctx context.Context, tenantID uuid.UUID, name, 
 // hints.Global applies to all tools; hints.Tools[name] adds a per-tool hint.
 // toolAllow/toolDeny are evaluated via IsToolAllowed so filtered-out tools never
 // get a BridgeTool created (LLM never sees them).
-func (m *Manager) registerPoolBridgeTools(entry *poolEntry, serverName, toolPrefix string, timeoutSec int, serverID uuid.UUID, hints ToolHints, toolAllow, toolDeny []string) []string {
+func (m *Manager) registerPoolBridgeTools(entry *poolEntry, serverName, toolPrefix string, timeoutSec int, serverID uuid.UUID, hints ToolHints, toolAllow, toolDeny []string, mpclawMode bool) []string {
 	var registeredNames []string
 	var filteredOut []string
 	for _, mcpTool := range entry.tools {
@@ -279,6 +280,7 @@ func (m *Manager) registerPoolBridgeTools(entry *poolEntry, serverName, toolPref
 		}
 
 		bt := NewBridgeTool(serverName, mcpTool, &entry.state.clientPtr, toolPrefix, timeoutSec, &entry.state.connected, serverID, m.grantChecker).
+			WithMPClawMode(mpclawMode).
 			WithHints(hints.Global, hints.HintFor(mcpTool.Name)).
 			WithForceReconnect(entry.RequestForceReconnect())
 
@@ -307,6 +309,10 @@ func (m *Manager) registerPoolBridgeTools(entry *poolEntry, serverName, toolPref
 	}
 
 	return registeredNames
+}
+
+func isMPClawMode(env map[string]string) bool {
+	return strings.EqualFold(strings.TrimSpace(env["MCP_AUTH_MODE"]), "mpclaw")
 }
 
 // createClient creates the appropriate MCP client based on transport type.

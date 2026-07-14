@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -15,10 +17,74 @@ import (
 // broadcastTeamEvent sends a real-time event via the message bus for team activity visibility.
 // Includes tenant_id from context for proper WS event filtering.
 func (m *TeamToolManager) broadcastTeamEvent(ctx context.Context, name string, payload any) {
+	m.recordTeamTaskEvent(ctx, name, payload)
 	if m.msgBus == nil {
 		return
 	}
 	bus.BroadcastForTenant(m.msgBus, name, store.TenantIDFromContext(ctx), payload)
+}
+
+func (m *TeamToolManager) recordTeamTaskEvent(ctx context.Context, name string, payload any) {
+	if m.teamStore == nil || !strings.HasPrefix(name, "team.task.") {
+		return
+	}
+
+	typed, ok := coerceTeamTaskEventPayload(payload)
+	if !ok || strings.TrimSpace(typed.TaskID) == "" {
+		return
+	}
+
+	taskID, err := uuid.Parse(strings.TrimSpace(typed.TaskID))
+	if err != nil {
+		slog.Warn("team_tasks.event: skip invalid task id", "event", name, "task_id", typed.TaskID, "error", err)
+		return
+	}
+
+	data, err := json.Marshal(typed)
+	if err != nil {
+		slog.Warn("team_tasks.event: failed to marshal payload", "event", name, "task_id", typed.TaskID, "error", err)
+		return
+	}
+
+	eventType := strings.TrimPrefix(name, "team.task.")
+	if eventType == "" {
+		eventType = name
+	}
+
+	if err := m.teamStore.RecordTaskEvent(ctx, &store.TeamTaskEventData{
+		TaskID:    taskID,
+		EventType: eventType,
+		ActorType: typed.ActorType,
+		ActorID:   typed.ActorID,
+		Data:      data,
+	}); err != nil {
+		slog.Warn("team_tasks.event: failed to record task event", "event", name, "task_id", typed.TaskID, "error", err)
+	}
+}
+
+func coerceTeamTaskEventPayload(payload any) (protocol.TeamTaskEventPayload, bool) {
+	switch typed := payload.(type) {
+	case protocol.TeamTaskEventPayload:
+		return typed, true
+	case *protocol.TeamTaskEventPayload:
+		if typed == nil {
+			return protocol.TeamTaskEventPayload{}, false
+		}
+		return *typed, true
+	default:
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return protocol.TeamTaskEventPayload{}, false
+		}
+		var decoded protocol.TeamTaskEventPayload
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			return protocol.TeamTaskEventPayload{}, false
+		}
+		if strings.TrimSpace(decoded.TaskID) == "" {
+			return protocol.TeamTaskEventPayload{}, false
+		}
+		return decoded, true
+	}
 }
 
 func reviewOutboundMessage(task *store.TeamTaskData, content string) bus.OutboundMessage {
@@ -90,7 +156,6 @@ func (m *TeamToolManager) FollowupMaxReminders(team *store.TeamData) int {
 // ============================================================
 // Version helpers
 // ============================================================
-
 
 // ============================================================
 // Follow-up settings helpers

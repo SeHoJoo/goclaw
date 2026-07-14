@@ -164,24 +164,25 @@ type DiscordConfig struct {
 }
 
 type SlackConfig struct {
-	Enabled        bool                `json:"enabled"`
-	BotToken       string              `json:"bot_token"`            // xoxb-... (Bot User OAuth Token)
-	AppToken       string              `json:"app_token"`            // xapp-... (App-Level Token for Socket Mode)
-	UserToken      string              `json:"user_token,omitempty"` // xoxp-... (Optional: custom bot identity)
-	AllowFrom      FlexibleStringSlice `json:"allow_from"`
-	DMPolicy       string              `json:"dm_policy,omitempty"`       // "pairing" (default), "allowlist", "open", "disabled"
-	GroupPolicy    string              `json:"group_policy,omitempty"`    // "open" (default), "pairing", "allowlist", "disabled"
-	RequireMention *bool               `json:"require_mention,omitempty"` // require @bot mention in channels (default true)
-	HistoryLimit   int                 `json:"history_limit,omitempty"`   // max pending group messages for context (default 50, 0=disabled)
-	DMStream       *bool               `json:"dm_stream,omitempty"`       // enable streaming for DMs (default false)
-	GroupStream    *bool               `json:"group_stream,omitempty"`    // enable streaming for groups (default false)
-	NativeStream   *bool               `json:"native_stream,omitempty"`   // use Slack ChatStreamer API if available (default false)
-	ReactionLevel  string              `json:"reaction_level,omitempty"`  // "off" (default), "minimal", "full"
-	BlockReply     *bool               `json:"block_reply,omitempty"`     // override gateway block_reply (nil = inherit)
-	ChatBehavior   *ChatBehaviorConfig `json:"chat_behavior,omitempty"`   // override gateway chat behavior (nil = inherit)
-	DebounceDelay  *int                `json:"debounce_delay,omitempty"`  // ms delay before dispatching rapid messages (default 300, 0=disabled)
-	ThreadTTL      *int                `json:"thread_ttl,omitempty"`      // hours before thread participation expires (default 24, 0=disabled — always require @mention)
-	MediaMaxBytes  int64               `json:"media_max_bytes,omitempty"` // max file download size in bytes (default 20MB)
+	Enabled             bool                `json:"enabled"`
+	BotToken            string              `json:"bot_token"`            // xoxb-... (Bot User OAuth Token)
+	AppToken            string              `json:"app_token"`            // xapp-... (App-Level Token for Socket Mode)
+	UserToken           string              `json:"user_token,omitempty"` // xoxp-... (Optional: custom bot identity)
+	AllowFrom           FlexibleStringSlice `json:"allow_from"`
+	DMPolicy            string              `json:"dm_policy,omitempty"`            // "pairing" (default), "allowlist", "open", "disabled"
+	GroupPolicy         string              `json:"group_policy,omitempty"`         // "open" (default), "pairing", "allowlist", "disabled"
+	RequireMention      *bool               `json:"require_mention,omitempty"`      // require @bot mention in channels (default true)
+	HistoryLimit        int                 `json:"history_limit,omitempty"`        // max pending group messages for context (default 50, 0=disabled)
+	DMStream            *bool               `json:"dm_stream,omitempty"`            // enable streaming for DMs (default false)
+	GroupStream         *bool               `json:"group_stream,omitempty"`         // enable streaming for groups (default false)
+	NativeStream        *bool               `json:"native_stream,omitempty"`        // use Slack ChatStreamer API if available (default false)
+	ReactionLevel       string              `json:"reaction_level,omitempty"`       // "off" (default), "minimal", "full"
+	BlockReply          *bool               `json:"block_reply,omitempty"`          // override gateway block_reply (nil = inherit)
+	ChatBehavior        *ChatBehaviorConfig `json:"chat_behavior,omitempty"`        // override gateway chat behavior (nil = inherit)
+	ThinkingPlaceholder *bool               `json:"thinking_placeholder,omitempty"` // send "Thinking..." placeholder before responding (default true)
+	DebounceDelay       *int                `json:"debounce_delay,omitempty"`       // ms delay before dispatching rapid messages (default 300, 0=disabled)
+	ThreadTTL           *int                `json:"thread_ttl,omitempty"`           // hours before thread participation expires (default 24, 0=disabled — always require @mention)
+	MediaMaxBytes       int64               `json:"media_max_bytes,omitempty"`      // max file download size in bytes (default 20MB)
 }
 
 type WhatsAppConfig struct {
