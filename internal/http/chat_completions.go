@@ -186,20 +186,33 @@ func extractSessionKey(r *http.Request, agentID, userID, runID string) string {
 	return sessions.SessionKey(agentID, sessionSuffix)
 }
 
+func resolveChatScope(localKey, peerKind, userID string) string {
+	if localKey = strings.TrimSpace(localKey); localKey != "" {
+		return localKey
+	}
+	if peerKind == "direct" && strings.TrimSpace(userID) != "" {
+		return strings.TrimSpace(userID)
+	}
+	return "api"
+}
+
 func (h *ChatCompletionsHandler) handleNonStream(w http.ResponseWriter, r *http.Request, loop agent.Agent, runID, sessionKey, message, model, userID, localKey, peerKind string) {
 	ctx, drainTeamDispatch := tools.InjectTeamDispatch(r.Context(), h.postTurn)
 	defer drainTeamDispatch()
+	chatScope := resolveChatScope(localKey, peerKind, userID)
 
 	result, err := loop.Run(ctx, agent.RunRequest{
-		SessionKey: sessionKey,
-		Message:    message,
-		Channel:    "http",
-		ChatID:     "api",
-		RunID:      runID,
-		UserID:     userID,
-		LocalKey:   localKey,
-		PeerKind:   peerKind,
-		Stream:     false,
+		SessionKey:       sessionKey,
+		Message:          message,
+		Channel:          "http",
+		ChatID:           chatScope,
+		RunID:            runID,
+		UserID:           userID,
+		LocalKey:         localKey,
+		PeerKind:         peerKind,
+		WorkspaceChannel: "http",
+		WorkspaceChatID:  chatScope,
+		Stream:           false,
 	})
 
 	if err != nil {
@@ -252,17 +265,20 @@ func (h *ChatCompletionsHandler) handleStream(w http.ResponseWriter, r *http.Req
 
 	ctx, drainTeamDispatch := tools.InjectTeamDispatch(r.Context(), h.postTurn)
 	defer drainTeamDispatch()
+	chatScope := resolveChatScope(localKey, peerKind, userID)
 
 	result, err := loop.Run(ctx, agent.RunRequest{
-		SessionKey: sessionKey,
-		Message:    message,
-		Channel:    "http",
-		ChatID:     "api",
-		RunID:      runID,
-		UserID:     userID,
-		LocalKey:   localKey,
-		PeerKind:   peerKind,
-		Stream:     true,
+		SessionKey:       sessionKey,
+		Message:          message,
+		Channel:          "http",
+		ChatID:           chatScope,
+		RunID:            runID,
+		UserID:           userID,
+		LocalKey:         localKey,
+		PeerKind:         peerKind,
+		WorkspaceChannel: "http",
+		WorkspaceChatID:  chatScope,
+		Stream:           true,
 	})
 
 	if err != nil {
