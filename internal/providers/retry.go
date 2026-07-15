@@ -61,7 +61,7 @@ func (e *HTTPError) Error() string {
 }
 
 // IsRetryableError checks if an error is retryable.
-// Retryable: 429 (rate limit), 500, 502, 503, 504, connection errors, timeouts.
+// Retryable: 429 (rate limit), selected transient 5xx errors, connection errors, timeouts.
 func IsRetryableError(err error) bool {
 	if err == nil {
 		return false
@@ -71,7 +71,7 @@ func IsRetryableError(err error) bool {
 	var httpErr *HTTPError
 	if errors.As(err, &httpErr) {
 		switch httpErr.Status {
-		case 429, 500, 502, 503, 504:
+		case 429, 500, 502, 503, 504, 520:
 			return true
 		}
 		return false
